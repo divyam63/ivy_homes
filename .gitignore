@@ -1,0 +1,7 @@
+node_modules/
+.pnpm-store/
+dist/
+.env
+audit-output.json
+analysis-output.json
+audit-data/
