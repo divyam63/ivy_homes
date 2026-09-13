@@ -11,6 +11,10 @@ A MERN-style property-search application for the Ivy Homes engineering task. It 
 
 For a production build use `npm run build`, then `npm start`.
 
+## Deploy on Render
+
+This repository includes `render.yaml`. In Render, choose **New → Blueprint**, connect this repository, and select it. Add `IVY_API_KEY` as a secret environment variable when prompted; do not add it to the repository. Render will build the Vite client and run the Express server that safely proxies the Ivy API.
+
 ## What works
 
 - Real login/logout through an Express proxy; bearer sessions survive a browser refresh and automatically attempt the API's supplied refresh flow after a 401 response.
