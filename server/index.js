@@ -119,6 +119,26 @@ app.post('/api/auth/logout', async (req, res) => {
   } catch (error) { res.status(502).json({ detail: error.message }); }
 });
 
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refresh_url: refreshUrl, refresh_token: refreshToken } = req.body || {};
+    if (!refreshUrl || !refreshToken) return res.status(400).json({ detail: 'refresh_url and refresh_token are required' });
+    const destination = new URL(refreshUrl, baseUrl);
+    if (destination.origin !== new URL(baseUrl).origin) return res.status(400).json({ detail: 'refresh_url must belong to the Ivy API' });
+    const response = await fetch(destination, {
+      method: 'POST',
+      headers: { 'X-API-Key': apiKey || '', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: AbortSignal.timeout(25_000)
+    });
+    const body = await response.text();
+    let data;
+    try { data = JSON.parse(body); } catch { data = { detail: body }; }
+    const token = data?.token || data?.access_token || data?.accessToken || data?.session?.token || data?.data?.token;
+    res.status(response.status).json(token ? { ...data, token } : data);
+  } catch (error) { res.status(502).json({ detail: error.message }); }
+});
+
 app.get('/api/catalog/:kind', async (req, res) => {
   const allowed = new Set(['listings', 'rentals', 'projects']);
   if (!allowed.has(req.params.kind)) return res.status(404).json({ detail: 'Unknown collection' });

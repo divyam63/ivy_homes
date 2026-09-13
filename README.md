@@ -13,7 +13,7 @@ For a production build use `npm run build`, then `npm start`.
 
 ## What works
 
-- Real login/logout through an Express proxy; bearer sessions survive a refresh.
+- Real login/logout through an Express proxy; bearer sessions survive a browser refresh and automatically attempt the API's supplied refresh flow after a 401 response.
 - Sale listings, rentals and projects, with pagination and client-enforced locality, BHK, price and furnishing filters.
 - URL-addressable details, saved-listing add/remove/list, and responsive layouts.
 - An insights page that explicitly handles the unavailable documented analytics route rather than showing invented metrics.
