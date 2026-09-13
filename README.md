@@ -21,6 +21,8 @@ For a production build use `npm run build`, then `npm start`.
 
 ## API investigation and audit
 
+See [the investigation notes](docs/investigation.md) for the exact hypotheses, invariants and cross-checks used for the dataset answers.
+
 Run `npm run audit` only after adding the demo password to `.env`. It signs in, retrieves each collection by following the API's actual `offset`, `returned` and `has_more` response values, writes `audit-output.json`, and emits reproducible leads for duplicate, impossible and inconsistent records.
 
 Live checks and full-download results:
