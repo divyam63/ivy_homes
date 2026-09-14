@@ -1,6 +1,7 @@
 const SESSION_KEY = 'ivy-session';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://solve.ivy.homes';
-const API_KEY = import.meta.env.VITE_API_KEY;
+let API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://solve.ivy.homes';
+if (API_BASE_URL && !API_BASE_URL.startsWith('http')) API_BASE_URL = 'https://' + API_BASE_URL;
+const API_KEY = import.meta.env.VITE_API_KEY || 'IVY26-BC5AF8B7C8D4';
 
 export function getSession() {
   try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
