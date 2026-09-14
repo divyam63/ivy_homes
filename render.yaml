@@ -1,10 +1,13 @@
 services:
   - type: web
     name: ivy-homes
-    env: node
+    env: static
     buildCommand: npm install && npm run build
-    startCommand: npm start
+    publishPath: dist
     plan: free
     branch: master
-    healthCheckPath: /
     autoDeploy: true
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
