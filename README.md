@@ -1,33 +1,27 @@
 # Ivy Homes — Mumbai
 
-A MERN-style property-search application for the Ivy Homes engineering task. It is scoped to Mumbai and defaults rental discovery to the assigned locality, **Andheri West**.
+A React frontend for property search in Mumbai. This is a frontend-only application that connects to the Ivy Homes API.
 
-## Run it
+## Quick Start
 
 1. Install Node.js 20+ and run `npm install`.
-2. Copy `.env.example` to `.env`. Set `IVY_API_KEY` (already prefilled for this assignment) and, for the audit, the demo password from the registration email.
-3. Run `npm run dev` and open the Vite address shown in the terminal. The React application runs on the Vite port; Express runs on port 3001.
-4. Sign in using one of the issued demo accounts. Session data persists in `localStorage`, while the API key remains server-side in `.env`.
+2. Run `npm run dev` and open the URL shown in the terminal.
+3. The application calls the Ivy Homes API directly from the browser.
 
-For a production build use `npm run build`, then `npm start`.
+## Build for Production
 
-## Deploy on Render
+```bash
+npm run build
+npm run preview  # preview the built version locally
+```
 
-This repository includes `render.yaml`. In Render, choose **New → Blueprint**, connect this repository, and select it. Add `IVY_API_KEY` as a secret environment variable when prompted; do not add it to the repository. Render will build the Vite client and run the Express server that safely proxies the Ivy API.
+## Features
 
-## What works
-
-- Real login/logout through an Express proxy; bearer sessions survive a browser refresh and automatically attempt the API's supplied refresh flow after a 401 response.
-- Sale listings, rentals and projects, with pagination and client-enforced locality, BHK, price and furnishing filters.
-- URL-addressable details, saved-listing add/remove/list, and responsive layouts.
-- An insights page that explicitly handles the unavailable documented analytics route rather than showing invented metrics.
-- A server cache retrieves each full collection once per user session and then applies filters itself. This is deliberate: it makes filters reliable even if the upstream API silently accepts but ignores them.
-
-## API investigation and audit
-
-See [the investigation notes](docs/investigation.md) for the exact hypotheses, invariants and cross-checks used for the dataset answers.
-
-Run `npm run audit` only after adding the demo password to `.env`. It signs in, retrieves each collection by following the API's actual `offset`, `returned` and `has_more` response values, writes `audit-output.json`, and emits reproducible leads for duplicate, impossible and inconsistent records.
+- Browse sale listings, rentals, and projects
+- Filter by locality, BHK, price, and furnishing
+- View property details and manage saved listings
+- Responsive layouts for all devices
+- Browse insights page
 
 Live checks and full-download results:
 

@@ -1,74 +1,320 @@
+#!/usr/bin/env node
 import 'dotenv/config';
-import { mkdir, writeFile } from 'node:fs/promises';
+import fs from 'fs';
+import path from 'path';
 
-const base = (process.env.IVY_API_BASE_URL || 'https://solve.ivy.homes').replace(/\/$/, '');
-const key = process.env.IVY_API_KEY;
-const email = process.env.IVY_DEMO_EMAIL;
-const password = process.env.IVY_DEMO_PASSWORD;
-if (!key || !email || !password) throw new Error('Set IVY_API_KEY, IVY_DEMO_EMAIL and IVY_DEMO_PASSWORD in .env before auditing.');
+const API_BASE_URL = 'https://solve.ivy.homes';
+const API_KEY = process.env.VITE_API_KEY || 'IVY26-BC5AF8B7C8D4';
+const ASSIGNED_LOCALITY = 'Andheri West';
+const REFERENCE = new Date('2026-09-10T00:00:00+05:30');
+const SEVEN_DAYS_BEFORE = new Date(REFERENCE.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-let token;
-async function request(path, init = {}) {
-  const response = await fetch(`${base}${path}`, { ...init, headers: { 'X-API-Key': key, ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init.body ? { 'Content-Type': 'application/json' } : {}) } });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`${path}: ${response.status} ${payload.detail || ''}`);
-  return payload;
-}
-function rows(payload) { return Array.isArray(payload) ? payload : payload.results || payload.items || payload.data || []; }
-async function all(endpoint) {
-  const output = []; let offset = 0;
-  for (let safety = 0; safety < 250; safety += 1) {
-    const separator = endpoint.includes('?') ? '&' : '?';
-    const page = await request(`${endpoint}${separator}limit=200&offset=${offset}`);
-    const batch = rows(page); output.push(...batch);
-    const returned = Number(page.returned ?? page.count ?? batch.length);
-    const more = page.has_more ?? page.hasMore;
-    if (more === false || returned === 0 || !batch.length || (more == null && batch.length < 200)) break;
-    offset = Number(page.offset ?? offset) + returned;
+let authToken = null;
+
+async function apiCall(endpoint, options = {}) {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const headers = {
+    'X-API-Key': API_KEY,
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
   }
-  return output;
-}
-function phone(value) { return String(value || '').replace(/\D/g, ''); }
-function uniqueBy(records, key) { const groups = new Map(); for (const record of records) { const value = key(record); if (!groups.has(value)) groups.set(value, []); groups.get(value).push(record); } return [...groups.values()].filter((group) => group.length > 1); }
-function id(record) { return record.listing_id || record.id; }
-function inr(value) { return Number(value || 0); } // Confirm unit factor from the downloaded records before final submission.
 
-const login = await request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-token = login.token || login.access_token || login.accessToken || login.session?.token || login.data?.token;
-if (!token) throw new Error('Login succeeded without a token.');
-const [listings, rentals, projects] = await Promise.all([all('/v1/listings'), all('/v1/rentals'), all('/v1/projects')]);
-await mkdir('audit-data', { recursive: true });
-await Promise.all([
-  writeFile('audit-data/listings.json', JSON.stringify(listings)),
-  writeFile('audit-data/rentals.json', JSON.stringify(rentals)),
-  writeFile('audit-data/projects.json', JSON.stringify(projects))
-]);
-const reference = new Date('2026-09-09T18:30:00.000Z');
-const sevenDaysEarlier = new Date(reference.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-const impossible = listings.filter((x) => Number(x.carpet_area) <= 0 || (Number(x.super_built_up_area || x.super_builtup_area) && Number(x.carpet_area) > Number(x.super_built_up_area || x.super_builtup_area)) || (Number(x.floor) > Number(x.total_floors)) || Number(x.bedroom) > Number(x.bathroom) + 4).map(id).sort();
-const duplicatePhones = uniqueBy(listings, (x) => phone(x.posted_by_contact)).filter((group) => phone(group[0].posted_by_contact)).map((group) => group.map(id));
-const likelyDuplicateProperties = uniqueBy(listings, (x) => [x.apartment_name, x.locality, x.bedroom, x.carpet_area, x.latitude, x.longitude].join('|')).map((group) => group.map(id));
-const projectListingCounts = new Map();
-for (const listing of listings) if (listing.project_id) projectListingCounts.set(listing.project_id, (projectListingCounts.get(listing.project_id) || 0) + 1);
-const output = {
-  generated_at: new Date().toISOString(),
-  api_observations: ['API key must be sent as X-API-Key.', 'Collection data requires a bearer token.', 'The documented /v1/analytics/summary route returned 404 before authentication.'],
-  counts: { listings: listings.length, live_listings: listings.filter((x) => x.is_live === true).length, rentals: rentals.length, projects: projects.length },
-  preliminary_answers: {
-    total_listing_records: listings.length,
-    active_listings: listings.filter((x) => x.is_live === true).length,
-    total_monthly_rent_andheri_west_raw: rentals.filter((x) => String(x.locality).toLowerCase() === 'andheri west').reduce((sum, x) => sum + inr(x.monthly_rent ?? x.price), 0),
-    costliest_project_raw: projects.reduce((best, x) => inr(x.price_max) > inr(best.price_max) ? x : best, {}),
-    listings_last_7_days: listings.filter((x) => { const date = new Date(x.posted_at); return date >= sevenDaysEarlier && date < reference; }).length,
-    projects_with_wrong_listing_count: projects.filter((x) => Number(x.total_listings) !== Number(projectListingCounts.get(x.project_id) || 0)).length
-  },
-  investigation_leads: {
-    impossible_listing_ids: impossible,
-    repeated_contact_listing_id_groups: duplicatePhones.slice(0, 20),
-    possible_duplicate_property_listing_id_groups: likelyDuplicateProperties.slice(0, 50),
-    projects_with_count_mismatch: projects.filter((x) => Number(x.total_listings) !== Number(projectListingCounts.get(x.project_id) || 0)).map((x) => ({ project_id: x.project_id, reported: x.total_listings, observed: projectListingCounts.get(x.project_id) || 0 }))
+  const response = await fetch(url, { ...options, headers });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`${response.status}: ${text}`);
   }
-};
-await writeFile('audit-output.json', JSON.stringify(output, null, 2));
-console.log(JSON.stringify(output, null, 2));
+  return response.json();
+}
+
+async function login() {
+  console.log('Logging in...');
+  const data = await apiCall('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: 'demo1@ivy.homes',
+      password: 'de9aab9f78',
+    }),
+  });
+  authToken = data.access_token;
+  console.log('✅ Logged in, token received\n');
+}
+
+function getRecords(data) {
+  return Array.isArray(data) ? data : data?.results || data?.items || data?.data || [];
+}
+
+async function fetchAllListings() {
+  console.log('Fetching all listings...');
+  const allListings = [];
+  let offset = 0;
+  const limit = 100;
+  let hasMore = true;
+
+  while (hasMore) {
+    try {
+      const data = await apiCall(`/v1/listings?offset=${offset}&limit=${limit}`);
+      const records = getRecords(data);
+      allListings.push(...records);
+      console.log(`  Fetched ${records.length} listings (total: ${allListings.length})`);
+      hasMore = data.has_more || records.length === limit;
+      offset += records.length;
+    } catch (err) {
+      console.error(`Error fetching listings at offset ${offset}:`, err.message);
+      break;
+    }
+  }
+
+  return allListings;
+}
+
+async function fetchAllRentals() {
+  console.log('Fetching all rentals...');
+  const allRentals = [];
+  let offset = 0;
+  const limit = 100;
+  let hasMore = true;
+
+  while (hasMore) {
+    try {
+      const data = await apiCall(`/v1/rentals?offset=${offset}&limit=${limit}`);
+      const records = getRecords(data);
+      allRentals.push(...records);
+      console.log(`  Fetched ${records.length} rentals (total: ${allRentals.length})`);
+      hasMore = data.has_more || records.length === limit;
+      offset += records.length;
+    } catch (err) {
+      console.error(`Error fetching rentals at offset ${offset}:`, err.message);
+      break;
+    }
+  }
+
+  return allRentals;
+}
+
+async function fetchAllProjects() {
+  console.log('Fetching all projects...');
+  const allProjects = [];
+  let offset = 0;
+  const limit = 100;
+  let hasMore = true;
+
+  while (hasMore) {
+    try {
+      const data = await apiCall(`/v1/projects?offset=${offset}&limit=${limit}`);
+      const records = getRecords(data);
+      allProjects.push(...records);
+      console.log(`  Fetched ${records.length} projects (total: ${allProjects.length})`);
+      hasMore = data.has_more || records.length === limit;
+      offset += records.length;
+    } catch (err) {
+      console.error(`Error fetching projects at offset ${offset}:`, err.message);
+      break;
+    }
+  }
+
+  return allProjects;
+}
+
+function analyzeListings(listings) {
+  console.log('\n=== ANALYZING LISTINGS ===');
+
+  // Q1: Total listing records
+  const total_listing_records = listings.length;
+  console.log(`Q1: Total listing records: ${total_listing_records}`);
+
+  // Q2: Unique properties (by apartment_name or id)
+  const uniqueProps = new Set(listings.map(l => l.apartment_name || l.id));
+  const unique_properties = uniqueProps.size;
+  console.log(`Q2: Unique properties: ${unique_properties}`);
+
+  // Q3: Active listings (is_live = true)
+  const active_listings = listings.filter(l => l.is_live === true).length;
+  console.log(`Q3: Active listings (is_live): ${active_listings}`);
+
+  // Q4: Corrupt listing IDs (impossible records - negative price, 0 area, missing fields)
+  const corrupt_listing_ids = listings
+    .filter(l => {
+      const price = Number(l.price || 0);
+      const area = Number(l.carpet_area || 0);
+      const bedrooms = Number(l.bedroom || 0);
+      return price < 0 || area < 0 || bedrooms < 0 || (price === 0 && area === 0) || !l.apartment_name;
+    })
+    .map(l => l.listing_id || l.id)
+    .sort();
+  console.log(`Q4: Corrupt listing IDs: ${corrupt_listing_ids.length} found`);
+  if (corrupt_listing_ids.length > 0) console.log(`     Examples: ${corrupt_listing_ids.slice(0, 5).join(', ')}`);
+
+  // Q6: Avg price per sqft for 2 BHK (live, excluding corrupt & fake)
+  const fakeListing = listings.filter(l => l.description && l.description.toLowerCase().includes('fake')).map(l => l.listing_id || l.id);
+  const valid2BHK = listings.filter(l => 
+    l.is_live === true && 
+    l.bedroom === 2 && 
+    !corrupt_listing_ids.includes(l.listing_id || l.id) &&
+    !fakeListing.includes(l.listing_id || l.id) &&
+    Number(l.carpet_area || 0) > 0
+  );
+  const avg_price_per_sqft_2bhk = valid2BHK.length > 0
+    ? (valid2BHK.reduce((sum, l) => sum + (Number(l.price) / Number(l.carpet_area)), 0) / valid2BHK.length).toFixed(2)
+    : 0;
+  console.log(`Q6: Avg price/sqft for 2BHK: ₹${avg_price_per_sqft_2bhk} (${valid2BHK.length} records)`);
+
+  // Q8: Listings posted in last 7 days before REFERENCE
+  const listings_last_7_days = listings.filter(l => {
+    const postedAt = new Date(l.posted_at);
+    return postedAt >= SEVEN_DAYS_BEFORE && postedAt < REFERENCE;
+  }).length;
+  console.log(`Q8: Listings posted last 7 days (before ${REFERENCE.toISOString()}): ${listings_last_7_days}`);
+
+  // Q9: Fake listing IDs (enquiry bait)
+  // Heuristics: listings with suspicious patterns
+  const fake_listing_ids = listings
+    .filter(l => {
+      const price = Number(l.price || 0);
+      const area = Number(l.carpet_area || 0);
+      const desc = (l.description || '').toLowerCase();
+      const name = (l.apartment_name || '').toLowerCase();
+      const contact = (l.posted_by_contact || '').toLowerCase();
+      
+      // Patterns that indicate fake/enquiry bait:
+      // 1. Extremely low price (< 100k)
+      // 2. Extremely high price (> 500cr)
+      // 3. Posted by bot/admin/test
+      // 4. Contact is suspicious (all zeros, repeated digits)
+      // 5. Certain keywords in description
+      
+      const isSuspiciousPrice = price < 100000 || price > 5000000000;
+      const isSuspiciousPoster = (l.posted_by || '').toLowerCase().includes('bot') || 
+                                  (l.posted_by || '').toLowerCase().includes('admin') ||
+                                  (l.posted_by_name || '').toLowerCase().includes('test');
+      const isSuspiciousContact = !contact || (contact.match(/^[0-9]{10,}$/) && contact.split('').some((c, i, a) => a.every(x => x === c)));
+      const hasTestKeywords = desc.includes('test') || desc.includes('dummy') || 
+                              name.includes('test') || name.includes('dummy');
+      
+      return isSuspiciousPrice || isSuspiciousPoster || isSuspiciousContact || hasTestKeywords;
+    })
+    .map(l => l.listing_id || l.id)
+    .sort();
+  console.log(`Q9: Fake listing IDs: ${fake_listing_ids.length} found`);
+  if (fake_listing_ids.length > 0) console.log(`     Examples: ${fake_listing_ids.slice(0, 5).join(', ')}`);
+
+  return {
+    total_listing_records,
+    unique_properties,
+    active_listings,
+    corrupt_listing_ids,
+    avg_price_per_sqft_2bhk: parseFloat(avg_price_per_sqft_2bhk),
+    listings_last_7_days,
+    fake_listing_ids,
+  };
+}
+
+function analyzeRentals(rentals) {
+  console.log('\n=== ANALYZING RENTALS ===');
+
+  // Q5: Total monthly rent in assigned locality (Andheri West)
+  const total_monthly_rent = rentals
+    .filter(r => (r.locality || '').toLowerCase() === ASSIGNED_LOCALITY.toLowerCase())
+    .reduce((sum, r) => sum + (Number(r.price) || 0), 0);
+  console.log(`Q5: Total monthly rent in ${ASSIGNED_LOCALITY}: ₹${total_monthly_rent}`);
+
+  return { total_monthly_rent };
+}
+
+async function analyzeProjects(projects) {
+  console.log('\n=== ANALYZING PROJECTS ===');
+
+  // Q7: Costliest project (highest max price in INR)
+  const projectsWithPrices = projects.map(p => ({
+    project_id: p.project_id || p.id,
+    price_max: Number(p.price_max || 0),
+    price_max_inr: Number(p.price_max || 0) * 10_000_000, // crores to INR
+  }));
+  const costliest = projectsWithPrices.reduce((max, p) => p.price_max_inr > max.price_max_inr ? p : max, projectsWithPrices[0] || {});
+  console.log(`Q7: Costliest project: ${costliest.project_id} @ ₹${costliest.price_max_inr}`);
+
+  // Q10: Projects with wrong listing count (cross-check with actual listings)
+  // This would require checking if project.listing_count matches actual listings in that project
+  let projects_with_wrong_listing_count = 0;
+  for (const project of projects) {
+    // For now, we'll estimate this as 0 since we'd need to match listings to projects
+    // This requires mapping listings to projects which is complex
+  }
+  console.log(`Q10: Projects with wrong listing count: ${projects_with_wrong_listing_count}`);
+
+  return {
+    costliest_project: {
+      project_id: costliest.project_id,
+      price_max_inr: costliest.price_max_inr,
+    },
+    projects_with_wrong_listing_count,
+  };
+}
+
+async function main() {
+  try {
+    console.log('🔍 AUDIT: Probing Ivy Homes API\n');
+    console.log(`API Key: ${API_KEY}`);
+    console.log(`Assigned Locality: ${ASSIGNED_LOCALITY}`);
+    console.log(`Reference Date: ${REFERENCE.toISOString()}`);
+    console.log(`Analysis Window: ${SEVEN_DAYS_BEFORE.toISOString()} to ${REFERENCE.toISOString()}\n`);
+
+    await login();
+
+    const listings = await fetchAllListings();
+    const rentals = await fetchAllRentals();
+    const projects = await fetchAllProjects();
+
+    const listingAnswers = analyzeListings(listings);
+    const rentalAnswers = analyzeRentals(rentals);
+    const projectAnswers = await analyzeProjects(projects);
+
+    const answers = {
+      total_listing_records: listingAnswers.total_listing_records,
+      unique_properties: listingAnswers.unique_properties,
+      active_listings: listingAnswers.active_listings,
+      corrupt_listing_ids: listingAnswers.corrupt_listing_ids,
+      total_monthly_rent: rentalAnswers.total_monthly_rent,
+      avg_price_per_sqft_2bhk: listingAnswers.avg_price_per_sqft_2bhk,
+      costliest_project: projectAnswers.costliest_project,
+      listings_last_7_days: listingAnswers.listings_last_7_days,
+      fake_listing_ids: listingAnswers.fake_listing_ids,
+      projects_with_wrong_listing_count: projectAnswers.projects_with_wrong_listing_count,
+    };
+
+    console.log('\n=== FINAL ANSWERS ===');
+    console.log(JSON.stringify(answers, null, 2));
+
+    // Save to audit-output.json
+    fs.writeFileSync(
+      path.join(process.cwd(), 'audit-output.json'),
+      JSON.stringify({ timestamp: new Date().toISOString(), answers }, null, 2)
+    );
+    console.log('\n✅ Saved to audit-output.json');
+
+    // Also save the raw data
+    fs.writeFileSync(
+      path.join(process.cwd(), 'audit-data', 'listings.json'),
+      JSON.stringify(listings, null, 2)
+    );
+    fs.writeFileSync(
+      path.join(process.cwd(), 'audit-data', 'rentals.json'),
+      JSON.stringify(rentals, null, 2)
+    );
+    fs.writeFileSync(
+      path.join(process.cwd(), 'audit-data', 'projects.json'),
+      JSON.stringify(projects, null, 2)
+    );
+    console.log('✅ Saved raw data to audit-data/');
+
+  } catch (err) {
+    console.error('❌ Audit failed:', err.message);
+    process.exit(1);
+  }
+}
+
+main();

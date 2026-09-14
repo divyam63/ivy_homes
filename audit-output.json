@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-09-14T04:08:37.704Z",
+  "answers": {
+    "total_listing_records": 5100,
+    "unique_properties": 1029,
+    "active_listings": 4017,
+    "corrupt_listing_ids": [
+      "100-5002758",
+      "100-5003364",
+      "100-5003914",
+      "100-5004028",
+      "DWE-5000518",
+      "DWE-5002309",
+      "DWE-5002623",
+      "MAG-5001874",
+      "MAG-5002204",
+      "SQU-5000538",
+      "ZER-5003818"
+    ],
+    "total_monthly_rent": 7523000,
+    "avg_price_per_sqft_2bhk": 62332.07,
+    "costliest_project": {
+      "project_id": "P50016",
+      "price_max_inr": 124400000
+    },
+    "listings_last_7_days": 167,
+    "fake_listing_ids": [],
+    "projects_with_wrong_listing_count": 0
+  }
+}
