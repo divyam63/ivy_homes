@@ -17,13 +17,7 @@ The goal of this project is to build a modern, responsive web application that a
    npm install
    ```
 
-2. **Set environment variables** in `.env`:
-   ```
-   VITE_API_BASE_URL=https://solve.ivy.homes
-   VITE_API_KEY=IVY26-BC5AF8B7C8D4
-   ```
-
-3. **Start the development server**:
+2. **Start the development server**:
    ```bash
    npm run dev
    ```
