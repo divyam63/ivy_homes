@@ -1,16 +1,28 @@
 {
   "api_key": "IVY26-BC5AF8B7C8D4",
   "candidate": {
-    "name": "Your Name",
-    "email": "your.email@example.com",
-    "repo_url": "https://github.com/your-username/ivy-homes",
-    "demo_url": "https://your-app-url.vercel.app"
+    "name": "Divyam Gupta",
+    "email": "divyam.20233121@mnnit.ac.in",
+    "repo_url": "https://github.com/divyam63/ivy_homes",
+    "demo_url": "https://ivy-homes-zce9.onrender.com/"
   },
   "answers": {
     "total_listing_records": 5100,
     "unique_properties": 1029,
     "active_listings": 4017,
-    "corrupt_listing_ids": ["100-5002758", "100-5003364", "100-5003914", "100-5004028", "DWE-5000518", "DWE-5002309", "DWE-5002623", "MAG-5001874", "MAG-5002204", "SQU-5000538", "ZER-5003818"],
+    "corrupt_listing_ids": [
+      "100-5002758",
+      "100-5003364",
+      "100-5003914",
+      "100-5004028",
+      "DWE-5000518",
+      "DWE-5002309",
+      "DWE-5002623",
+      "MAG-5001874",
+      "MAG-5002204",
+      "SQU-5000538",
+      "ZER-5003818"
+    ],
     "total_monthly_rent": 7523000,
     "avg_price_per_sqft_2bhk": 62332.07,
     "costliest_project": {
@@ -29,7 +41,11 @@
       "actual": "Returns a field named 'access_token' instead; also returns 'refresh_token' and 'refresh_url'",
       "how_found": "Tested login flow with demo credentials and inspected the response structure",
       "impact": "Frontend code must normalize 'access_token' to 'token' for internal consistency, or update all token references",
-      "evidence": ["demo1@ivy.homes", "demo2@ivy.homes", "demo3@ivy.homes"]
+      "evidence": [
+        "demo1@ivy.homes",
+        "demo2@ivy.homes",
+        "demo3@ivy.homes"
+      ]
     },
     {
       "endpoint": "/v1/analytics/summary",
@@ -56,7 +72,9 @@
       "actual": "Price fields (price_min, price_max, price) are in crores; must multiply by 10,000,000 for INR",
       "how_found": "Compared project prices with rental prices; noticed project prices were 10 million times larger when converted",
       "impact": "All project prices must be multiplied by 10,000,000 for display in INR",
-      "evidence": ["P50016"]
+      "evidence": [
+        "P50016"
+      ]
     }
   ]
 }
